@@ -33,8 +33,19 @@
 	go
     
 -- 3.- Obtener todas las columnas de la tabla Region.
+    select * from Region;
+    go
 
 -- 4.- Obtener los FirstName y LastName de la tabla Employees.
+    select * from Employees;
+    go
+
+    select
+	    FirstName,
+        LastName,
+        FirstName + ' ' + LastName as [Full name]
+    from Employees;
+    go 
 
 -- 5.- Obtener las columnas FirstName y LastName de la tabla Employees. Ordenados por la columna LastName.
 
