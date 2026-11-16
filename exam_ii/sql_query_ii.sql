@@ -26,7 +26,6 @@
     -- Ctrl + s: guardar
     -- Ctrl + e o F5: ejecutar el código (recuerda seleccionar el código que deseas ejecutar)
     -- Seleccionar el código --> clic derecho --> Ejecutar: ejecutar el código
-    -- ...
 
 -- 2.- Crear o utilizar una tabla
 	use Northwind;
@@ -96,6 +95,11 @@
     
 
 -- 5.- Genera un PIVOT que muestre el total de ventas realizadas en cada país por año (1996, 1997 y 1998), no se considera los descuentos. La consulta debe tener las columnas Country, 1996, 1997, y 1998, con los totales de ventas por año en cada país. El formato que aparecerá debe ser en dólares ($).
+    select * from Customers;
+    select * from Orders;
+    select * from [Order Details];
+    go
+    
     with ventas_pais_anio as (
         select
             C.Country,
@@ -128,11 +132,63 @@
     go
 
 -- 6.- Crea un resumen de las ventas totales por año. Usa variables para definir el año de inicio y el año de finalización, y luego genera un reporte con el total de ventas por cada año dentro de ese rango,si el usuario quiere cambiar el rango solo debe cambiar el valor de las variables sin afectar al resto del Query.
+    select * from Orders;
+    select * from [Order Details];
+    go
     
-
-
+    declare @AnioInicio int = 1996;
+    declare @AnioFin    int = 1998;
+    with anios as (
+        select @AnioInicio as anio
+        union all
+        select anio + 1
+        from anios
+        where anio < @AnioFin
+    ),
+    ventas as (
+        select
+            year(O.OrderDate)               as anio,
+            sum(OD.UnitPrice * OD.Quantity) as total_ventas
+        from Orders as O
+        inner join [Order Details] as OD on O.OrderID = OD.OrderID
+        where (O.OrderDate >= datefromparts(@AnioInicio, 1, 1) and O.OrderDate < datefromparts(@AnioFin + 1, 1, 1))
+        group by year(O.OrderDate)
+    )
+    select
+        A.anio                                            as Anio,
+        cast(isnull(V.total_ventas, 0) as decimal(18, 2)) as TotalVentas
+    from anios as A
+    left join ventas as V on A.anio = V.anio
+    order by A.anio
+    option (maxrecursion 100);
+    go
+    
 -- 7.- En base a la tabla Orders, crea un calendario, considerando solo las fechas únicas. Los meses y días deben estar en español. La columna DIA_DEL_ANIO, debe considerar los 365 día del año, si la fecha es 01/01 entonces será el día 1 si la fecha es 31/12 entonces será 365 o 366 según corresponda. La columna ULT_DIA_MES, debe considerar el último día del mes en curso, si el mes tiene 30 días entonces saldrá 30 si es 31 entonces debe mostrar 31 y si el mes trae 28 días entonces mostrará 28. La columna AVANCE_MES es una combinación entre NUM_DIA_MES y ULT_DIA_MES
+    set language Spanish;
+    go
 
+    with calendario as (
+        select distinct
+            cast(OrderDate as date) as fecha
+        from Orders
+        where OrderDate is not null
+    )
+    select top 10
+        C.fecha                                                                                   as FECHA,
+        year(C.fecha)                                                                             as ANIO,
+        month(C.fecha)                                                                            as MES_NUMERO,
+        upper(left(datename(month, C.fecha), 1)) + substring(datename(month, C.fecha), 2, 20)     as MES_NOMBRE,
+        (datediff(day, '19000101', C.fecha) % 7) + 1                                              as DIA_SEMANA,
+        upper(left(datename(weekday, C.fecha), 1)) + substring(datename(weekday, C.fecha), 2, 20) as DIA_NOMBRE,
+        datepart(iso_week, C.fecha)                                                               as SEMANA,
+        datepart(dayofyear, C.fecha)                                                              as DIA_DEL_ANIO,
+        day(C.fecha)                                                                              as NUM_DIA_MES,
+        day(eomonth(C.fecha))                                                                     as ULT_DIA_MES,
+        concat( day(C.fecha), ' de ', day(eomonth(C.fecha)), ' dias')                             as AVANCE_MES
+    from calendario as C
+    order by C.fecha;
+    go
+    
 -- 8.- Obtener un reporte por Vendedor que muestre el número de órdenes y el importe vendido para cada año de operaciones.
 
 -- 9.- Obtener un reporte por Categorias que muestre el importe vendido para cada Categoría.
