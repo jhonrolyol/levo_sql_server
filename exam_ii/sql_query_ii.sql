@@ -190,12 +190,147 @@
     go
     
 -- 8.- Obtener un reporte por Vendedor que muestre el número de órdenes y el importe vendido para cada año de operaciones.
+    select * from Employees;
+    select * from Orders;
+    select * from [Order Details];
+    go
+
+    select top 7
+        E.FirstName + ' ' + E.LastName                           as [Vendedor],
+        year(O.OrderDate)                                        as [Anio],
+        count(distinct O.OrderID)                                as [Nro. Ordenes],
+        cast( sum(OD.UnitPrice * OD.Quantity) as decimal(18, 2)) as [Importe Vendido]
+    from Employees as E
+    inner join Orders          as O  on O.EmployeeID = E.EmployeeID
+    inner join [Order Details] as OD on OD.OrderID  = O.OrderID
+    where O.OrderDate is not null
+    group by E.EmployeeID, E.FirstName, E.LastName, year(O.OrderDate)
+    order by [Importe Vendido] desc;
+    go
 
 -- 9.- Obtener un reporte por Categorias que muestre el importe vendido para cada Categoría.
+    select * from Categories;
+    select * from Products ;
+    select * from [Order Details];
+    go
+
+    select
+        C.CategoryName as [CategoryName],
+        cast(isnull( sum(OD.UnitPrice * OD.Quantity), 0) as decimal(18, 2)) as [Importe Vendido]
+    from Categories as C
+    left join Products        as P  on P.CategoryID = C.CategoryID
+    left join [Order Details] as OD on OD.ProductID = P.ProductID
+    group by C.CategoryID, C.CategoryName
+    order by [Importe Vendido] desc;
+    go
 
 -- 10.- Procedimiento para Obtener el Historial de Pedidos de un Cliente. Este procedimiento permite consultar el historial de pedidos de un cliente especificando su ID. Muestra detalles como la fecha del pedido, el monto total y el número de productos. Luego de crear el procedimiento valídalo con el cliente: VINET
+    select * from Orders;
+    select * from [Order Details];
+    go
 
+    create or alter procedure sp_ohpc
+        @id_cliente nchar(5)
+    as
+    begin
+        set nocount on;
+        select
+            O.CustomerID                                            as [ID_Cliente],
+            O.OrderID                                               as [ID_Pedido],
+            cast(O.OrderDate as date)                               as [Fecha_Pedido],
+            cast(sum(OD.UnitPrice * OD.Quantity) as decimal(18, 2)) as [Monto_Total],
+            count(distinct OD.ProductID)                            as [Cantidad_Productos]
+        from Orders as O
+        inner join [Order Details] as OD on O.OrderID = OD.OrderID
+        where O.CustomerID = @id_cliente
+        group by O.CustomerID, O.OrderID, O.OrderDate
+        order by O.OrderDate desc, O.OrderID desc;
+    end;
+    go
+
+    exec sp_ohpc @id_cliente = 'VINET';
+    go
+    
 -- 11.- Procedimiento Almacenado para Agregar un Nuevo Producto. Este procedimiento permite agregar un nuevo producto en la tabla Products, y mostrar el producto ingresado al ejecutar el procedimiento. Para esto se debe considerar: Se agregarán los campos: ProductName, SupplierID, CategoryID, UnitPrice
+    select * from Products;
+    go
+
+    create or alter procedure AgregarProducto
+        @ProductName nvarchar(40),
+        @SupplierID int,
+        @CategoryID int,
+        @UnitPrice money
+    as
+    begin
+        set nocount on;
+        insert into Products (ProductName, SupplierID, CategoryID, UnitPrice)
+        values (@ProductName, @SupplierID, @CategoryID, @UnitPrice);
+        select * from Products
+        where ProductID = scope_identity();
+    end;
+    go
+
+    exec AgregarProducto
+        @ProductName = 'Producto Nuevo',
+        @SupplierID  = 1,
+        @CategoryID  = 2,
+        @UnitPrice   = 100;
+    go
+
 
 -- 12.- Procedimiento almacenado para buscar ventas mensuales, con la categoría. Basado en la pregunta 3: Complementarlo con lo siguiente: Agregar la columna Categoria a la Query. Agregar en el Where buscar por categoría basado en el nombre, el usuario puede saber el nombre completo o solo algunos caracteres. Se puede usar like como alternativa. Convertirlo en Procedimiento almacenado con el nombre: SP_ObtenerVentasPorProductoYCategoria
+    select * from Orders;
+    select * from [Order Details];
+    select * from Products ;
+    select * from Categories;
+    go
+
+    create or alter procedure sp_ovppc
+        @Categoria nvarchar(15)
+    as
+    begin
+        set nocount on;
+        with ventas_mensuales as (
+            select
+                C.CategoryName,
+                P.ProductName,
+                month(O.OrderDate) as num_mes,
+                OD.Quantity
+            from Orders as O
+            inner join [Order Details] as OD on OD.OrderID   = O.OrderID
+            inner join Products        as P  on P.ProductID  = OD.ProductID
+            inner join Categories      as C  on C.CategoryID = P.CategoryID
+            where O.OrderDate >= '19970101' and O.OrderDate < '19980101' and C.CategoryName like '%' + @Categoria + '%'
+        ),
+        pivote as (
+            select
+                CategoryName,
+                ProductName,
+                isnull([1], 0)  as Ene,
+                isnull([2], 0)  as Feb,
+                isnull([3], 0)  as Mar,
+                isnull([4], 0)  as Abr,
+                isnull([5], 0)  as May,
+                isnull([6], 0)  as Jun,
+                isnull([7], 0)  as Jul,
+                isnull([8], 0)  as Ago,
+                isnull([9], 0)  as Sep,
+                isnull([10], 0) as Oct,
+                isnull([11], 0) as Nov,
+                isnull([12], 0) as Dic
+            from ventas_mensuales
+            pivot (sum(Quantity) for num_mes in ( [1], [2], [3], [4], [5], [6], [7], [8], [9], [10], [11], [12])) as pv
+        )
+        select
+            ProductName  as [Producto],
+            CategoryName as [Categoria],
+            Ene, Feb, Mar, Abr, May, Jun, Jul, Ago, Sep, Oct, Nov, Dic,
+            Ene + Feb + Mar + Abr + May + Jun + Jul + Ago + Sep + Oct + Nov + Dic as [TotalVentas]
+        from pivote
+        order by ProductName;
+    end;
+    go
+
+    exec sp_ovppc @Categoria = N'Condiments';
+    go
 
